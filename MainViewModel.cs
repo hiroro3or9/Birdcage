@@ -6,17 +6,16 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using NAudio.Wave;
 
 namespace Birdcage;
 
 public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly AudioRecorder _recorder = new();
-    private WaveOutEvent? _player;
-    private AudioFileReader? _audioFileReader;
+    private readonly AudioPlayer _player = new();
     private readonly DispatcherTimer _timer;
     private readonly string _saveDirectory;
+    private DateTime _recordingStartedAt;
 
     [ObservableProperty]
     private ObservableCollection<FileInfo> _audioFiles = [];
@@ -26,6 +25,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private RecordSource _selectedRecordSource = RecordSource.SystemAudio;
+
+    [ObservableProperty]
+    private AudioFormat _selectedAudioFormat = AudioFormat.MP3;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RecordingButtonText))]
@@ -39,6 +41,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private TimeSpan _recordingTime;
 
     public RecordSource[] RecordSources { get; } = Enum.GetValues<RecordSource>();
+    public AudioFormat[] AudioFormats { get; } = Enum.GetValues<AudioFormat>();
 
     public string RecordingButtonText => IsRecording ? "録音停止" : "録音開始";
     public string PlaybackButtonText => IsPlaying ? "停止" : "再生";
@@ -49,12 +52,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Directory.CreateDirectory(_saveDirectory);
         RefreshAudioFiles();
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        // PlaybackStopped は再生スレッドから発火するため UI スレッドへディスパッチする
+        _player.PlaybackStopped += (_, _) => App.Current.Dispatcher.Invoke(StopPlayback);
+
+        // タイマーのばらつきに影響されないよう、経過時間は開始時刻からの差分で算出する
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _timer.Tick += (_, _) =>
         {
             if (IsRecording)
             {
-                RecordingTime = RecordingTime.Add(TimeSpan.FromSeconds(1));
+                RecordingTime = DateTime.Now - _recordingStartedAt;
             }
         };
     }
@@ -71,13 +78,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        string fileName = $"Record_{DateTime.Now:yyyyMMdd_HHmmss}.wav";
+        string fileName = $"Record_{DateTime.Now:yyyyMMdd_HHmmss}{AudioFileWriterFactory.GetExtension(SelectedAudioFormat)}";
         string filePath = Path.Combine(_saveDirectory, fileName);
-        
+
         try
         {
             _recorder.StartRecording(filePath, SelectedRecordSource);
             IsRecording = true;
+            _recordingStartedAt = DateTime.Now;
             RecordingTime = TimeSpan.Zero;
             _timer.Start();
         }
@@ -105,16 +113,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
             StopPlayback();
             return;
         }
-        
+
         if (SelectedAudioFile is null) return;
 
         try
         {
-            _audioFileReader = new AudioFileReader(SelectedAudioFile.FullName);
-            _player = new WaveOutEvent();
-            _player.Init(_audioFileReader);
-            _player.PlaybackStopped += (_, _) => App.Current.Dispatcher.Invoke(StopPlayback);
-            _player.Play();
+            _player.Play(SelectedAudioFile.FullName);
             IsPlaying = true;
         }
         catch (Exception ex)
@@ -126,13 +130,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void StopPlayback()
     {
-        _player?.Stop();
-        _player?.Dispose();
-        _player = null;
-        
-        _audioFileReader?.Dispose();
-        _audioFileReader = null;
-        
+        _player.Stop();
         IsPlaying = false;
     }
 
@@ -142,16 +140,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (SelectedAudioFile is null) return;
 
         var result = MessageBox.Show(
-            $"{SelectedAudioFile.Name} を削除しますか？", 
-            "確認", 
-            MessageBoxButton.YesNo, 
+            $"{SelectedAudioFile.Name} を削除しますか？",
+            "確認",
+            MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
         if (result != MessageBoxResult.Yes) return;
 
         try
         {
-            if (IsPlaying && _audioFileReader?.FileName == SelectedAudioFile.FullName)
+            if (IsPlaying && _player.CurrentFilePath == SelectedAudioFile.FullName)
             {
                 StopPlayback();
             }
@@ -169,9 +167,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshAudioFiles()
     {
         var files = new DirectoryInfo(_saveDirectory)
-            .GetFiles("*.wav")
+            .GetFiles()
+            .Where(f => AudioFileWriterFactory.SupportedExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase))
             .OrderByDescending(f => f.CreationTime);
-        
+
         AudioFiles.Clear();
         foreach (var file in files)
         {
@@ -182,7 +181,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _recorder.Dispose();
-        StopPlayback();
+        _player.Dispose();
         _timer.Stop();
         GC.SuppressFinalize(this);
     }

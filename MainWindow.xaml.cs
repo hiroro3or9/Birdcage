@@ -1,101 +1,73 @@
-﻿using System.Text;
+using System;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using Wpf.Ui.Controls;
 
-namespace Birdcage
-{
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : FluentWindow
-    {
-        public MainWindow()
-        {
-            InitializeComponent();
-            DataContext = new MainViewModel();
+namespace Birdcage;
 
-            // 実行ファイル自身のアイコンをタスクトレイのアイコンとして設定
-            try
+/// <summary>
+/// Interaction logic for MainWindow.xaml
+/// </summary>
+public partial class MainWindow : FluentWindow
+{
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContext = new MainViewModel();
+
+        // 実行ファイル自身のアイコンをタスクトレイのアイコンとして設定
+        // (Assembly.Location は単一ファイル発行時に空になるため ProcessPath を使う)
+        try
+        {
+            string? exePath = Environment.ProcessPath;
+            if (exePath != null)
             {
-                var icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                var icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
                 if (icon != null)
                 {
                     MyNotifyIcon.Icon = icon;
                 }
             }
-            catch { }
         }
-
-        private void MenuExit_Click(object sender, RoutedEventArgs e)
+        catch
         {
-            Application.Current.Shutdown();
-        }
-
-        private void TaskbarIcon_TrayLeftMouseDown(object sender, RoutedEventArgs e)
-        {
-            if (Visibility == Visibility.Visible)
-            {
-                Visibility = Visibility.Hidden;
-            }
-            else
-            {
-                Visibility = Visibility.Visible;
-                WindowState = WindowState.Normal;
-                Activate();
-            }
-        }
-
-        protected override void OnStateChanged(EventArgs e)
-        {
-            if (WindowState == WindowState.Minimized)
-            {
-                Visibility = Visibility.Hidden;
-            }
-            base.OnStateChanged(e);
-        }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            if (DataContext is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-            base.OnClosed(e);
+            // アイコン取得に失敗しても既定アイコンで動作継続
         }
     }
 
-    public class InverseBooleanConverter : IValueConverter
+    private void MenuExit_Click(object sender, RoutedEventArgs e)
     {
-        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        {
-            if (value is bool b) return !b;
-            return value;
-        }
+        Application.Current.Shutdown();
+    }
 
-        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+    private void TaskbarIcon_TrayLeftMouseDown(object sender, RoutedEventArgs e)
+    {
+        if (Visibility == Visibility.Visible)
         {
-            throw new NotImplementedException();
+            Visibility = Visibility.Hidden;
+        }
+        else
+        {
+            Visibility = Visibility.Visible;
+            WindowState = WindowState.Normal;
+            Activate();
         }
     }
 
-    public class EnumToBooleanConverter : IValueConverter
+    protected override void OnStateChanged(EventArgs e)
     {
-        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        if (WindowState == WindowState.Minimized)
         {
-            return value?.Equals(parameter) ?? false;
+            Visibility = Visibility.Hidden;
         }
+        base.OnStateChanged(e);
+    }
 
-        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+    protected override void OnClosed(EventArgs e)
+    {
+        if (DataContext is IDisposable disposable)
         {
-            return value?.Equals(true) == true ? parameter : Binding.DoNothing;
+            disposable.Dispose();
         }
+        base.OnClosed(e);
     }
 }

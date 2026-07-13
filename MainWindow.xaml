@@ -78,12 +78,29 @@
             <!-- 上部：録音コントローラ (Cardコントロールを使って浮き出た感じに) -->
             <ui:Card Grid.Row="0" Margin="0,0,0,15" Padding="20">
                 <StackPanel>
-                    <TextBlock Text="録音ソースを選択" Margin="0,0,0,8" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <ComboBox ItemsSource="{Binding RecordSources}" 
-                              SelectedItem="{Binding SelectedRecordSource}" 
-                              Margin="0,0,0,20" Padding="10,6"
-                              HorizontalAlignment="Stretch"
-                              IsEnabled="{Binding IsRecording, Converter={StaticResource InverseBooleanConverter}}"/>
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="録音ソースを選択" Margin="0,0,0,8" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding RecordSources}"
+                                      SelectedItem="{Binding SelectedRecordSource}"
+                                      Padding="10,6"
+                                      HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding IsRecording, Converter={StaticResource InverseBooleanConverter}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="形式" Margin="0,0,0,8" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <ComboBox ItemsSource="{Binding AudioFormats}"
+                                      SelectedItem="{Binding SelectedAudioFormat}"
+                                      Padding="10,6"
+                                      HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding IsRecording, Converter={StaticResource InverseBooleanConverter}}"/>
+                        </StackPanel>
+                    </Grid>
 
                     <ui:Button Content="{Binding RecordingButtonText}" 
                             Command="{Binding ToggleRecordingCommand}" 
