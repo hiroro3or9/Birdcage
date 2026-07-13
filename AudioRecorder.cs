@@ -19,7 +19,7 @@ public class AudioRecorder : IDisposable
 {
     private WasapiCapture? _micCapture;
     private WasapiLoopbackCapture? _loopCapture;
-    private WaveFileWriter? _writer;
+    private IAudioFileWriter? _writer;
     private BufferedWaveProvider? _micBuffer;
     private BufferedWaveProvider? _loopBuffer;
     private MixingSampleProvider? _mixer;
@@ -38,7 +38,7 @@ public class AudioRecorder : IDisposable
             case RecordSource.Microphone:
                 _micCapture = new WasapiCapture();
                 var micFormat = _micCapture.WaveFormat;
-                _writer = new WaveFileWriter(filePath, micFormat);
+                _writer = AudioFileWriterFactory.Create(filePath, micFormat);
                 _micCapture.DataAvailable += (_, a) => 
                 {
                     // オーディオインターフェース等のマイクにおいて、左（L）にしか音が入らない場合への対策
@@ -62,7 +62,7 @@ public class AudioRecorder : IDisposable
                 break;
             case RecordSource.SystemAudio:
                 _loopCapture = new WasapiLoopbackCapture();
-                _writer = new WaveFileWriter(filePath, _loopCapture.WaveFormat);
+                _writer = AudioFileWriterFactory.Create(filePath, _loopCapture.WaveFormat);
                 _loopCapture.DataAvailable += (_, a) => 
                 {
                     _writer.Write(a.Buffer, 0, a.BytesRecorded);
@@ -83,7 +83,7 @@ public class AudioRecorder : IDisposable
     private int _fileSplitCount = 0;
     private const long MaxFileSize = 3L * 1024 * 1024 * 1024; // 3GBで安全に分割
 
-    private void CheckFileSizeAndSplit(ref WaveFileWriter? writer, string originalFilePath, WaveFormat format)
+    private void CheckFileSizeAndSplit(ref IAudioFileWriter? writer, string originalFilePath, WaveFormat format)
     {
         if (writer != null && writer.Length > MaxFileSize)
         {
@@ -96,7 +96,7 @@ public class AudioRecorder : IDisposable
             string ext = Path.GetExtension(originalFilePath);
             string newPath = Path.Combine(dir, $"{name}_{_fileSplitCount:D3}{ext}");
 
-            writer = new WaveFileWriter(newPath, format);
+            writer = AudioFileWriterFactory.Create(newPath, format);
         }
     }
 
@@ -149,7 +149,7 @@ public class AudioRecorder : IDisposable
         _mixer.AddMixerInput(new ContinuousSampleProvider(micProvider));
         _mixer.AddMixerInput(new ContinuousSampleProvider(loopProvider));
 
-        _writer = new WaveFileWriter(filePath, _mixer.WaveFormat);
+        _writer = AudioFileWriterFactory.Create(filePath, _mixer.WaveFormat);
 
         _micCapture.DataAvailable += (_, a) => _micBuffer.AddSamples(a.Buffer, 0, a.BytesRecorded);
         _loopCapture.DataAvailable += (_, a) => _loopBuffer.AddSamples(a.Buffer, 0, a.BytesRecorded);

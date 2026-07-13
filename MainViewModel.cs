@@ -28,6 +28,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private RecordSource _selectedRecordSource = RecordSource.SystemAudio;
 
     [ObservableProperty]
+    private AudioFormat _selectedAudioFormat = AudioFormat.MP3;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RecordingButtonText))]
     private bool _isRecording;
 
@@ -39,6 +42,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private TimeSpan _recordingTime;
 
     public RecordSource[] RecordSources { get; } = Enum.GetValues<RecordSource>();
+    public AudioFormat[] AudioFormats { get; } = Enum.GetValues<AudioFormat>();
 
     public string RecordingButtonText => IsRecording ? "録音停止" : "録音開始";
     public string PlaybackButtonText => IsPlaying ? "停止" : "再生";
@@ -71,7 +75,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        string fileName = $"Record_{DateTime.Now:yyyyMMdd_HHmmss}.wav";
+        string fileName = $"Record_{DateTime.Now:yyyyMMdd_HHmmss}{AudioFileWriterFactory.GetExtension(SelectedAudioFormat)}";
         string filePath = Path.Combine(_saveDirectory, fileName);
         
         try
@@ -169,7 +173,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshAudioFiles()
     {
         var files = new DirectoryInfo(_saveDirectory)
-            .GetFiles("*.wav")
+            .GetFiles()
+            .Where(f => AudioFileWriterFactory.SupportedExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase))
             .OrderByDescending(f => f.CreationTime);
         
         AudioFiles.Clear();
